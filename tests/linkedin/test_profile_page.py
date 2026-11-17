@@ -82,3 +82,19 @@ class TestReadProfileDisplayName:
         mock_page.evaluate = AsyncMock(return_value=None)
 
         assert await _reader(mock_page)._read_profile_display_name() is None
+
+
+class TestExtractProfileImageUrl:
+    async def test_returns_a_public_top_card_image_url(self, mock_page):
+        mock_page.evaluate = AsyncMock(
+            return_value="https://media.licdn.com/dms/image/v2/example/profile.jpg"
+        )
+
+        assert await _reader(mock_page).extract_profile_image_url() == (
+            "https://media.licdn.com/dms/image/v2/example/profile.jpg"
+        )
+
+    async def test_rejects_non_web_image_urls(self, mock_page):
+        mock_page.evaluate = AsyncMock(return_value="data:image/png;base64,abc")
+
+        assert await _reader(mock_page).extract_profile_image_url() is None

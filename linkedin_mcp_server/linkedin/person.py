@@ -225,6 +225,7 @@ class PersonReader:
         references: dict[str, list[Reference]] = {}
         section_errors: dict[str, dict[str, Any]] = {}
         profile_urn: str | None = None
+        profile_image_url: str | None = None
         rate_limited = False
 
         requested_ordered = [
@@ -305,6 +306,13 @@ class PersonReader:
                         and not rate_limited
                     ):
                         profile_urn = await self._profile_page._extract_profile_urn()
+                    if section_name == "main_profile" and not rate_limited:
+                        try:
+                            profile_image_url = (
+                                await self._profile_page.extract_profile_image_url()
+                            )
+                        except Exception as error:
+                            logger.info("Profile image was unavailable: %s", error)
                 except LinkedInOperationError:
                     raise
                 except Exception as e:
@@ -335,6 +343,8 @@ class PersonReader:
             "url": f"{base_url}/",
             "sections": sections,
         }
+        if profile_image_url:
+            result["profile_image_url"] = profile_image_url
         if profile_urn:
             result["profile_urn"] = profile_urn
         if references:

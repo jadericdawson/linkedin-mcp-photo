@@ -72,3 +72,33 @@ class ProfilePageReader:
             return None
         display_name = display_name.strip()
         return display_name or None
+
+    async def extract_profile_image_url(self) -> str | None:
+        """Return the public top-card headshot URL on the loaded profile page.
+
+        LinkedIn profile reads intentionally use text extraction for most
+        fields, but an image is not represented in ``innerText``.  Keep this
+        narrow DOM read beside the other top-card identity reads and return
+        only an absolute http(s) source URL.
+        """
+        image_url = await self._session.run_on_linkedin(
+            """() => {
+                const main = document.querySelector('main');
+                if (!main) return '';
+                const images = main.querySelectorAll(
+                    'img.pv-top-card-profile-picture__image, '
+                    + 'img[class*="profile-picture"], '
+                    + 'img[alt*="profile picture" i], '
+                    + 'img[alt*="profile photo" i]'
+                );
+                for (const image of images) {
+                    const src = image.currentSrc || image.src || image.getAttribute('data-delayed-url') || '';
+                    if (/^https?:\\/\\//i.test(src)) return src;
+                }
+                return '';
+            }"""
+        )
+        if not isinstance(image_url, str):
+            return None
+        image_url = image_url.strip()
+        return image_url if image_url.startswith(("https://", "http://")) else None

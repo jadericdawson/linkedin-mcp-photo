@@ -68,6 +68,26 @@ def extracted(
 class TestReadPersonUrls:
     """Test that read_person visits the correct URLs per section set."""
 
+    async def test_returns_profile_image_url_from_main_profile(self, mock_page):
+        reader = _reader(mock_page)
+        with (
+            patch.object(
+                reader._capture,
+                "capture",
+                new_callable=AsyncMock,
+                return_value=extracted("profile text"),
+            ),
+            patch.object(
+                reader._profile_page,
+                "extract_profile_image_url",
+                new_callable=AsyncMock,
+                return_value="https://media.licdn.com/profile.jpg",
+            ),
+        ):
+            result = await reader.read_person("testuser", {"main_profile"})
+
+        assert result["profile_image_url"] == "https://media.licdn.com/profile.jpg"
+
     async def test_baseline_always_included(self, mock_page):
         """Passing only experience still visits main profile."""
         reader = _reader(mock_page)
