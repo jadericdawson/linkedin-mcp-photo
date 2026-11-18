@@ -83,19 +83,52 @@ class ProfilePageReader:
         """
         image_url = await self._session.run_on_linkedin(
             """() => {
-                const main = document.querySelector('main');
-                if (!main) return '';
-                const images = main.querySelectorAll(
-                    'img.pv-top-card-profile-picture__image, '
-                    + 'img[class*="profile-picture"], '
-                    + 'img[alt*="profile picture" i], '
-                    + 'img[alt*="profile photo" i]'
-                );
-                for (const image of images) {
-                    const src = image.currentSrc || image.src || image.getAttribute('data-delayed-url') || '';
-                    if (/^https?:\\/\\//i.test(src)) return src;
+                // LinkedIn changes the top-card CSS classes often.  Its CDN
+                // image path is the stable signal: a member headshot is a
+                // profile-displayphoto, while sidebar avatars are smaller
+                // variants of the same image.  Read srcset rather than only
+                // currentSrc: Chromium may choose a low-resolution source.
+                const urls = new Set();
+                const add = value => {
+                    if (!value) return;
+                    for (const item of String(value).split(',')) {
+                        const url = item.trim().split(/\\s+/)[0];
+                        if (url) urls.add(url);
+                    }
+                };
+                for (const image of document.querySelectorAll('img')) {
+                    add(image.currentSrc);
+                    add(image.src);
+                    add(image.getAttribute('src'));
+                    add(image.getAttribute('data-delayed-url'));
+                    add(image.getAttribute('srcset'));
                 }
-                return '';
+                for (const source of document.querySelectorAll('source[srcset]')) {
+                    add(source.getAttribute('srcset'));
+                }
+
+                const candidates = [];
+                for (const raw of urls) {
+                    let parsed;
+                    try { parsed = new URL(raw, document.location.href); }
+                    catch (_) { continue; }
+                    if (!/^https:$/.test(parsed.protocol)
+                        || !/(^|\\.)licdn\\.com$/i.test(parsed.hostname)
+                        || !/\\/dms\\/image\\//i.test(parsed.pathname)
+                        || !/profile-displayphoto/i.test(parsed.pathname)) continue;
+                    const match = parsed.pathname.match(/profile-displayphoto[^/]*?(?:_|-)(\\d+)[_x](\\d+)/i);
+                    const size = match ? Math.max(Number(match[1]), Number(match[2])) : 0;
+                    candidates.push({ url: parsed.href, size });
+                }
+                candidates.sort((left, right) => right.size - left.size);
+                const best = candidates[0];
+                const next = candidates[1];
+                // A lone 100px thumbnail is normally a sidebar recommendation.
+                // A profile headshot is the uniquely largest variant on its own
+                // page, and LinkedIn commonly exposes an 800px source in srcset.
+                if (!best || best.size < 200) return '';
+                if (next && best.size <= next.size) return '';
+                return best.url;
             }"""
         )
         if not isinstance(image_url, str):

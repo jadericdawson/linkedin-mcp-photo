@@ -94,6 +94,11 @@ class TestExtractProfileImageUrl:
             "https://media.licdn.com/dms/image/v2/example/profile.jpg"
         )
 
+        script = mock_page.evaluate.await_args.args[0]
+        assert "srcset" in script
+        assert "profile-displayphoto" in script
+        assert "licdn" in script
+
     async def test_rejects_non_web_image_urls(self, mock_page):
         mock_page.evaluate = AsyncMock(return_value="data:image/png;base64,abc")
 
